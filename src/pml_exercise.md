@@ -25,16 +25,22 @@ matrix.littleNA <- function(m){
 trainingN <- subset(trainingN, select = matrix.littleNA(trainingN)) 
 summary(trainingN)
 
-#Feature selection using random forest and cross validation with a sampled data
+#Model building using random forest and cross validation
 set.seed(16888)
 inTrain <- createDataPartition(y=trainingN$classe, p=0.1, list=FALSE)
 training.rf <- trainingN[inTrain, ]
 testing.rf <- trainingN[-inTrain, ]
-modFit <- train(classe ~ ., method="rf", trControl=trainControl(method="cv"), data=trainingS)
+modFit <- train(classe ~ ., method="rf", trControl=trainControl(method="cv"), data=training.rf)
 varImp(modFit)
 print(modFit$finalModel)
+print(modFit$resample)
 plot(modFit)
 
 #Check the accuracy
 testing.predict <- predict(modFit, testing.rf)
 confusionMatrix(testing.rf$classe, testing.predict)
+
+#Prediction for the testing data
+head(testing)
+testing[, "classe"] = predict(modFit, testing)
+testing[, c("problem_id", "classe")]
