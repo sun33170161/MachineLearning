@@ -1,0 +1,96 @@
+---
+title: 'Coursera: Practical Machine Learning Project'
+author: "zwsun"
+date: "December 22, 2014"
+output: html_document
+---
+
+## Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: <a href="http://groupware.les.inf.puc-rio.br/har#weight_lifting_exercises">http://groupware.les.inf.puc-rio.br/har</a>
+
+## Load data
+
+First, we load the training and testing data. Since there are too many characters like "NA", "", "#DIV/0!" in the data, we just set them to be NA.
+    
+```{r, message=FALSE}
+library(caret)
+training <- read.csv(file = "data/pml-training.csv", na.strings=c("NA", "", "#DIV/0!"))
+testing <- read.csv(file = "data/pml-testing.csv", na.strings=c("NA", "", "#DIV/0!"))
+str(training, list.len = 10, vec.len =  10)
+```
+
+## Feature Extration
+
+From the page, we know that the timestamp and window data is just a time record, that has no affection for our response variable <i>classe</i>, so we remove them as below.
+    
+```{r}
+trainingN <- subset(training, select = 
+                      -c(X, user_name,
+                         raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp,
+                         new_window, num_window)                    
+)
+```
+   
+After that, when we explore the data, we find that many variables filled with NAs. That is meaningless, possibly that data was never measured. So we remove that data again.
+   
+```{r}
+var.bad <- function(x){sum(is.na(x)*1)>length(x)/2}
+matrix.littleNA <- function(m){
+  threshold = dim(m)[1]/2
+  r = c()
+  for( v in 1:dim(m)[2]){
+    if(sum(is.na(m[, v])*1) < threshold) r[length(r)+1] = v
+  }
+  r
+}
+trainingN <- subset(trainingN, select = matrix.littleNA(trainingN)) 
+str(trainingN, list.len = 10, vec.len =  10)
+```
+
+Now the data is clean, let's begin to build the model.
+
+## Model Buiding
+
+To build our model, I divide the data into two parts, one for training and the other for validation. Here I used the random forest to build my model. And I also used the cross validation to select the variables and optimize my model. To get a quick result, I set the cross validation fold number to be 2.
+    
+```{r, message=FALSE}
+set.seed(16888)
+inTrain <- createDataPartition(y=trainingN$classe, p=0.1, list=FALSE)
+training.rf <- trainingN[inTrain, ]
+testing.rf <- trainingN[-inTrain, ]
+modFit <- train(classe ~ ., method="rf", trControl=trainControl(method="cv", number = 2), 
+                data=training.rf)
+varImp(modFit)
+print(modFit$finalModel)
+plot(modFit)
+```
+    
+## Model Accuracy
+
+To estimate the accuracy of our model, we use a independent validation part of the whole data
+    
+```{r}
+testing.predict <- predict(modFit, testing.rf)
+cm <- confusionMatrix(testing.rf$classe, testing.predict)
+cm
+```
+
+From the output, we can estimate the accuracy to be `r cm[["overall"]][["Accuracy"]]`. And the 95% confidence interval is between `r cm[["overall"]][["AccuracyLower"]]` and `r cm[["overall"]][["AccuracyUpper"]]`, so I can estimate the out of sample error rate is less than `r 1-cm[["overall"]][["AccuracyLower"]]` at the 95% confidence interval.
+
+## Test Data Prediction
+
+At last, let's try to predict the testing data.
+    
+```{r}
+testing[, "classe"] = predict(modFit, testing)
+testing[, c("problem_id", "classe")]
+```
+
+## Further More
+
+The accuracy is very good though I only used 10 percent of the data to train the model for a immediate result. This can be improved when running more data with more time.
+
+## Declaration
+
+The data for this project come from this source: <a href="http://groupware.les.inf.puc-rio.br/har">http://groupware.les.inf.puc-rio.br/har</a>.
